@@ -1,13 +1,10 @@
 from enum import Enum, auto
+from typing import Protocol
 
 from pydantic import BaseModel
 
 
-class LootItem(Enum):
-    pass
-
-
-class Unique(LootItem):
+class Unique(Enum):
     GOOD_LP0 = auto()
     GOOD_LP1 = auto()
     GOOD_LP2 = auto()
@@ -16,11 +13,15 @@ class Unique(LootItem):
     BAD_LP2 = auto()
 
 
-class Legendary(LootItem):
+class Legendary(Enum):
     GOOD_LP1 = auto()
     GOOD_LP2 = auto()
     BAD_LP1 = auto()
     BAD_LP2 = auto()
+
+
+LootItem = Unique | Legendary
+Fractions = dict[LootItem, float]
 
 
 class Probabilities(BaseModel):
@@ -45,10 +46,37 @@ class Probabilities(BaseModel):
         return 1 - self.exalted_is_good
 
 
+class CraftProcess(Protocol):
+
+    def __init__(self, probabilities: Probabilities):
+        pass
+
+    @staticmethod
+    def apply_to(item: LootItem) -> tuple[LootItem, float]:
+        pass
+
+
+class RerollQuality:
+
+    def __init__(self, probabilities: Probabilities):
+        self.probabilities = probabilities
+
+    def apply_to(self, item: LootItem) -> tuple[LootItem, float]:
+        p = self.probabilities.unique_is_good / (1 + self.probabilities.unique_is_good)
+
+        if item is Unique.BAD_LP0:
+            return Unique.GOOD_LP0, p
+
+        if item is Unique.BAD_LP1:
+            return Unique.GOOD_LP1, p
+
+        raise ValueError(f"Do not apply RerollQuality to {item}")
+
+
 class Population(BaseModel):
     """Holds amount of items of every object type."""
 
-    fractions: dict[LootItem, float] = {}
+    fractions: Fractions = {}
 
     def __str__(self) -> str:
         strings = [
@@ -60,27 +88,7 @@ class Population(BaseModel):
 
         return "".join(strings)
 
-
-def drop(probs: Probabilities, normalize: float = 1.0) -> Population:
-    """
-    Produce a Population of items according to the drop chances from monsters.
-
-    Args:
-        probs (Probabilities):
-            Probabilities object, holding probabilities for dropping each object type.
-        normalize (optional float):
-            If given, normalize total population to this number. By default, normalize to 1.
-
-    Returns:
-        A Population of object types.
-    """
-    return Population(
-        fractions={
-            Unique.BAD_LP0: probs.unique_is_bad * probs.lp0 * normalize,
-            Unique.BAD_LP1: probs.unique_is_bad * probs.lp1 * normalize,
-            Unique.BAD_LP2: probs.unique_is_bad * probs.lp2 * normalize,
-            Unique.GOOD_LP0: probs.unique_is_good * probs.lp0 * normalize,
-            Unique.GOOD_LP1: probs.unique_is_good * probs.lp1 * normalize,
-            Unique.GOOD_LP2: probs.unique_is_good * probs.lp2 * normalize,
-        },
-    )
+    def apply(self, craft: CraftProcess, item: LootItem) -> None:
+        new, p = craft.apply_to(item)
+        self.fractions[new] = self.fractions.get(new, 0.0) + p * self.fractions[item]
+        self.fractions[item] = 0.0
