@@ -1,5 +1,5 @@
 from enum import Enum, auto
-from typing import Protocol
+from typing import Protocol, Self
 
 from pydantic import BaseModel
 
@@ -46,20 +46,46 @@ class Probabilities(BaseModel):
         return 1 - self.exalted_is_good
 
 
-class CraftProcess(Protocol):
-
-    def __init__(self, probabilities: Probabilities):
-        pass
+class CraftProcess(BaseModel):
+    name: str
+    applies_to: list[LootItem]
+    probabilities: Probabilities
 
     @staticmethod
     def apply_to(item: LootItem) -> tuple[LootItem, float]:
         pass
 
 
-class RerollQuality:
+class CraftAction(BaseModel):
+    """A craft action (CraftProcess plus LootItem to apply it to)."""
+    item: LootItem
+    process: CraftProcess
 
-    def __init__(self, probabilities: Probabilities):
-        self.probabilities = probabilities
+    def __str__(self) -> str:
+        return f"{self.item} + {self.process.name}"
+
+
+class CraftPlan(BaseModel):
+    """A selection of what to do to each LootItem, and in what order."""
+
+    actions: list[CraftAction] = []
+
+    @classmethod
+    def add(cls, plan: Self, action: CraftAction) -> Self:
+        actions = [*plan.actions, action]
+        return cls(actions=actions)
+
+
+
+class RerollQuality(CraftProcess):
+    name: str = "[Reroll Quality]"
+    applies_to: list[LootItem] = [
+        Unique.BAD_LP0,
+        Unique.BAD_LP1,
+        Unique.BAD_LP2,
+        Legendary.BAD_LP1,
+        Legendary.BAD_LP2,
+    ]
 
     def apply_to(self, item: LootItem) -> tuple[LootItem, float]:
         p = self.probabilities.unique_is_good / (1 + self.probabilities.unique_is_good)
@@ -69,6 +95,9 @@ class RerollQuality:
 
         if item is Unique.BAD_LP1:
             return Unique.GOOD_LP1, p
+
+        if item is Unique.BAD_LP2:
+            return Unique.GOOD_LP2, p
 
         raise ValueError(f"Do not apply RerollQuality to {item}")
 

@@ -1,4 +1,5 @@
-from src.entities import Probabilities, Population, Unique, RerollQuality
+from src.entities import Probabilities, Population, Unique, RerollQuality, CraftProcess, LootItem, Legendary, CraftPlan, \
+    CraftAction
 
 
 def drop(probs: Probabilities, normalize: float = 1.0) -> Population:
@@ -26,6 +27,50 @@ def drop(probs: Probabilities, normalize: float = 1.0) -> Population:
     )
 
 
+def make_craft_plans(crafts: list[CraftProcess]) -> list[CraftPlan]:
+    """
+    Given a list of craft processes, produce a list of craft plans.
+
+    A craft plan is a list of the form:
+
+    [
+        (CraftProcess1, LootItem1),
+        (CraftProcess2, LootItem2),
+        ...
+
+    ]
+
+    where it is specified what crafting to apply to each loot item type AND it is provided
+    in the order that it should be applied (in-game the order is not important).
+
+    Args:
+        crafts (list of CraftProcesses):
+            Available craft processes.
+
+    Returns:
+        A list of craft plans.
+    """
+    plans = [CraftPlan()]  # base blank plan
+    for item in(*Unique, *Legendary):
+        actions = [CraftAction(item=item, process=craft) for craft in crafts if item in craft.applies_to]
+        if not actions:
+            continue
+
+        new = []
+        for plan in plans:
+            for action in actions:
+                extended = CraftPlan.add(plan, action)
+                new.append(extended)
+        plans = new
+
+    for plan in plans:
+        print("---")
+        for action in plan.actions:
+            print("ac:", action)
+
+
+
+
 def main():
     probs = Probabilities(
         unique_is_good=0.013,
@@ -34,12 +79,16 @@ def main():
         lp1=0.2,
     )
     population = drop(probs, normalize=100)
-    print(population)
+    crafts = [
+        c(probabilities=probs)
+        for c in (
+            RerollQuality,
+        )
+    ]
 
-    rq = RerollQuality(probabilities=probs)
+    craft_plans = make_craft_plans(crafts)
 
-    population.apply(rq, Unique.BAD_LP0)
-    print(population)
+    population.apply(crafts[0], Unique.BAD_LP0)
 
 
 if __name__ == "__main__":
