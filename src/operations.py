@@ -1,5 +1,13 @@
-from src.entities import Probabilities, Population, Unique, RerollQuality, CraftProcess, LootItem, Legendary, CraftPlan, \
-    CraftAction
+from src.entities import (
+    Probabilities,
+    Population,
+    Unique,
+    RerollQuality,
+    CraftProcess,
+    Legendary,
+    CraftPlan,
+    CraftAction, Nemesis, Slam,
+)
 
 
 def drop(probs: Probabilities, normalize: float = 1.0) -> Population:
@@ -64,11 +72,9 @@ def make_craft_plans(crafts: list[CraftProcess]) -> list[CraftPlan]:
         plans = new
 
     for plan in plans:
-        print("---")
-        for action in plan.actions:
-            print("ac:", action)
+        print(plan)
 
-
+    return plans
 
 
 def main():
@@ -76,6 +82,7 @@ def main():
         unique_is_good=0.013,
         exalted_is_good=0.1,
         nemesis_stays_unique=0.25,
+        nemesis_lp1=0.75,
         lp1=0.2,
     )
     population = drop(probs, normalize=100)
@@ -83,6 +90,8 @@ def main():
         c(probabilities=probs)
         for c in (
             RerollQuality,
+            Nemesis,
+            Slam,
         )
     ]
 

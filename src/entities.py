@@ -1,23 +1,31 @@
 from enum import Enum, auto
-from typing import Protocol, Self
+from typing import Self
 
 from pydantic import BaseModel
 
 
 class Unique(Enum):
-    GOOD_LP0 = auto()
-    GOOD_LP1 = auto()
-    GOOD_LP2 = auto()
-    BAD_LP0 = auto()
-    BAD_LP1 = auto()
-    BAD_LP2 = auto()
+    GOOD_LP0 = "Good Unique LP0"
+    GOOD_LP1 = "Good Unique LP1"
+    GOOD_LP2 = "Good Unique LP2"
+    BAD_LP0 = "Bad Unique LP0"
+    BAD_LP1 = "Bad Unique LP1"
+    BAD_LP2 = "Bad Unique LP2"
+
+    @property
+    def to_str(self) -> str:
+        return self.value
 
 
 class Legendary(Enum):
-    GOOD_LP1 = auto()
-    GOOD_LP2 = auto()
-    BAD_LP1 = auto()
-    BAD_LP2 = auto()
+    GOOD_LP1 = "Good Legendary LP1"
+    GOOD_LP2 = "Good Legendary LP2"
+    BAD_LP1 = "Bad Legendary LP1"
+    BAD_LP2 = "Bad Legendary LP2"
+
+    @property
+    def to_str(self) -> str:
+        return self.value
 
 
 LootItem = Unique | Legendary
@@ -32,6 +40,7 @@ class Probabilities(BaseModel):
     nemesis_stays_unique: float  # probability that the Unique in the Nemesis gets added LP, and not affixes
     lp1: float                   # probability for {roll LP -> turns out LP1}
     lp2: float = 0.0             # probability for {roll LP -> turns out LP2}
+    nemesis_lp1: float = 1.0     # probability for Nemesis to move from LP0 to LP1
 
     @property
     def unique_is_bad(self) -> float:
@@ -45,6 +54,10 @@ class Probabilities(BaseModel):
     def exalted_is_bad(self) -> float:
         return 1 - self.exalted_is_good
 
+    @property
+    def nemesis_lp2(self) -> float:
+        return 1 - self.nemesis_lp1
+
 
 class CraftProcess(BaseModel):
     name: str
@@ -52,7 +65,7 @@ class CraftProcess(BaseModel):
     probabilities: Probabilities
 
     @staticmethod
-    def apply_to(item: LootItem) -> tuple[LootItem, float]:
+    def apply_to(item: LootItem) -> 'Population':
         pass
 
 
@@ -62,7 +75,7 @@ class CraftAction(BaseModel):
     process: CraftProcess
 
     def __str__(self) -> str:
-        return f"{self.item} + {self.process.name}"
+        return f"{self.item.to_str} + {self.process.name}"
 
 
 class CraftPlan(BaseModel):
@@ -73,8 +86,14 @@ class CraftPlan(BaseModel):
     @classmethod
     def add(cls, plan: Self, action: CraftAction) -> Self:
         actions = [*plan.actions, action]
+
         return cls(actions=actions)
 
+    def __str__(self) -> str:
+        lines = [str(a) for a in self.actions]
+        lines = ["---", *lines]
+
+        return "\n".join(lines)
 
 
 class RerollQuality(CraftProcess):
@@ -87,19 +106,91 @@ class RerollQuality(CraftProcess):
         Legendary.BAD_LP2,
     ]
 
-    def apply_to(self, item: LootItem) -> tuple[LootItem, float]:
+    def apply_to(self, item: LootItem) -> 'Population':
         p = self.probabilities.unique_is_good / (1 + self.probabilities.unique_is_good)
+        fractions = None
 
         if item is Unique.BAD_LP0:
-            return Unique.GOOD_LP0, p
+            fractions = {Unique.GOOD_LP0: p}
 
         if item is Unique.BAD_LP1:
-            return Unique.GOOD_LP1, p
+            fractions = {Unique.GOOD_LP1: p}
 
         if item is Unique.BAD_LP2:
-            return Unique.GOOD_LP2, p
+            fractions = {Unique.GOOD_LP2: p}
 
-        raise ValueError(f"Do not apply RerollQuality to {item}")
+        if fractions is None:
+            raise ValueError(f"Can not apply RerollQuality to {item}")
+
+        return Population(fractions=fractions)
+
+
+class Nemesis(CraftProcess):
+    name: str = "[Nemesis]"
+    applies_to: list[LootItem] = [
+        Unique.BAD_LP0,
+        Unique.GOOD_LP0,
+    ]
+
+    def apply_to(self, item: LootItem) -> 'Population':
+        pu = self.probabilities.nemesis_stays_unique
+        p1 = self.probabilities.nemesis_lp1
+        p2 = self.probabilities.nemesis_lp2
+        fractions = None
+
+        if item is Unique.BAD_LP0:
+            fractions = {
+                Unique.BAD_LP1: pu * p1,
+                Unique.BAD_LP2: pu * p2,
+                Legendary.BAD_LP1: (1 - pu) * p1,
+                Legendary.BAD_LP2: (1 - pu) * p2,
+            }
+
+        if item is Unique.GOOD_LP0:
+            fractions = {
+                Unique.GOOD_LP1: pu * p1,
+                Unique.GOOD_LP2: pu * p2,
+                Legendary.BAD_LP1: (1 - pu) * p1,  # Legendaries out of a Nemesis will always be bad
+                Legendary.BAD_LP2: (1 - pu) * p2,  # Legendaries out of a Nemesis will always be bad
+            }
+
+        if fractions is None:
+            raise ValueError(f"Can not apply Nemesis to {item}")
+
+        return Population(fractions=fractions)
+
+
+class Slam(CraftProcess):
+    name: str = "[Slam]"
+    applies_to: list[LootItem] = [
+        Unique.BAD_LP1,
+        Unique.BAD_LP2,
+        Unique.GOOD_LP1,
+        Unique.GOOD_LP2,
+    ]
+
+    def apply_to(self, item: LootItem) -> 'Population':
+        fractions = None
+
+        if item is Unique.BAD_LP1:
+            fractions = {Legendary.BAD_LP1: 1.0}
+
+        if item is Unique.BAD_LP2:
+            fractions = {Legendary.BAD_LP2: 1.0}
+
+        if item is Unique.GOOD_LP1:
+            fractions = {Legendary.GOOD_LP1: 1.0}
+
+        if item is Unique.GOOD_LP1:
+            fractions = {
+                Legendary.GOOD_LP1: 1.0 / 3.0,
+                Legendary.BAD_LP1: 2.0 / 3.0,
+            }
+
+        if fractions is None:
+            raise ValueError(f"Can not apply Slam to {item}")
+
+        return Population(fractions=fractions)
 
 
 class Population(BaseModel):
@@ -118,6 +209,10 @@ class Population(BaseModel):
         return "".join(strings)
 
     def apply(self, craft: CraftProcess, item: LootItem) -> None:
-        new, p = craft.apply_to(item)
-        self.fractions[new] = self.fractions.get(new, 0.0) + p * self.fractions[item]
+        new = craft.apply_to(item)
+        p = self.fractions[item]
+
+        for k, v in new.fractions.items():
+            self.fractions[k] = self.fractions.get(k, 0) + p * v
+
         self.fractions[item] = 0.0
