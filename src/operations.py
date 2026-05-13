@@ -39,18 +39,6 @@ def make_craft_plans(crafts: list[CraftProcess]) -> list[CraftPlan]:
     """
     Given a list of craft processes, produce a list of craft plans.
 
-    A craft plan is a list of the form:
-
-    [
-        (CraftProcess1, LootItem1),
-        (CraftProcess2, LootItem2),
-        ...
-
-    ]
-
-    where it is specified what crafting to apply to each loot item type AND it is provided
-    in the order that it should be applied (in-game the order is not important).
-
     Args:
         crafts (list of CraftProcesses):
             Available craft processes.
@@ -71,8 +59,8 @@ def make_craft_plans(crafts: list[CraftProcess]) -> list[CraftPlan]:
                 new.append(extended)
         plans = new
 
-    for plan in plans:
-        print(plan)
+    print(len(plans), "plans created")
+    print(plans[0])
 
     return plans
 
@@ -80,24 +68,35 @@ def make_craft_plans(crafts: list[CraftProcess]) -> list[CraftPlan]:
 def main():
     probs = Probabilities(
         unique_is_good=0.013,
-        exalted_is_good=0.1,
+        exalted_is_good_1=0.1,
+        exalted_is_good_2=0.0,
         nemesis_stays_unique=0.25,
-        nemesis_lp1=0.75,
+        nemesis_lp1=1.0,
         lp1=0.2,
     )
     population = drop(probs, normalize=100)
     crafts = [
-        c(probabilities=probs)
-        for c in (
+        craft(probabilities=probs)
+        for craft in (
             RerollQuality,
             Nemesis,
             Slam,
         )
     ]
 
-    craft_plans = make_craft_plans(crafts)
+    # craft_plans = make_craft_plans(crafts)
 
-    population.apply(crafts[0], Unique.BAD_LP0)
+    print(population)
+    population.apply(crafts[1], Unique.GOOD_LP0)
+    print(population)
+    population.apply(crafts[1], Unique.BAD_LP0)
+    print(population)
+    population.apply(crafts[2], Unique.BAD_LP1)
+    print(population)
+    population.apply(crafts[0], Legendary.BAD_LP1)
+    print(population)
+    population.apply(crafts[2], Unique.GOOD_LP1)
+    print(population)
 
 
 if __name__ == "__main__":

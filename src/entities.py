@@ -36,7 +36,8 @@ class Probabilities(BaseModel):
     """Object to provide the probability for all outcomes in all processes."""
 
     unique_is_good: float        # probability that a Unique rolls as "good"
-    exalted_is_good: float       # probability that an Exalted (with proper affixes) rerolls as "good"
+    exalted_is_good_1: float     # probability that an Exalted (with ONE proper affix) rerolls as "good"
+    exalted_is_good_2: float     # probability that an Exalted (with TWO proper affixes) rerolls as "good"
     nemesis_stays_unique: float  # probability that the Unique in the Nemesis gets added LP, and not affixes
     lp1: float                   # probability for {roll LP -> turns out LP1}
     lp2: float = 0.0             # probability for {roll LP -> turns out LP2}
@@ -51,8 +52,12 @@ class Probabilities(BaseModel):
         return 1 - self.lp1 - self.lp2
 
     @property
-    def exalted_is_bad(self) -> float:
-        return 1 - self.exalted_is_good
+    def exalted_is_bad_1(self) -> float:
+        return 1 - self.exalted_is_good_1
+
+    @property
+    def exalted_is_bad_2(self) -> float:
+        return 1 - self.exalted_is_good_2
 
     @property
     def nemesis_lp2(self) -> float:
@@ -107,17 +112,28 @@ class RerollQuality(CraftProcess):
     ]
 
     def apply_to(self, item: LootItem) -> 'Population':
-        p = self.probabilities.unique_is_good / (1 + self.probabilities.unique_is_good)
+        pu = self.probabilities.unique_is_good
+        pe1 = self.probabilities.exalted_is_good_1
+        pe2 = self.probabilities.exalted_is_good_2
+        pop_u = pu / (1 + pu)
+        pop_l1 = pu * pe1 / (1 + pu * pe1)
+        pop_l2 = pu * pe2 / (1 + pu * pe2)
         fractions = None
 
         if item is Unique.BAD_LP0:
-            fractions = {Unique.GOOD_LP0: p}
+            fractions = {Unique.GOOD_LP0: pop_u}
 
         if item is Unique.BAD_LP1:
-            fractions = {Unique.GOOD_LP1: p}
+            fractions = {Unique.GOOD_LP1: pop_u}
 
         if item is Unique.BAD_LP2:
-            fractions = {Unique.GOOD_LP2: p}
+            fractions = {Unique.GOOD_LP2: pop_u}
+
+        if item is Legendary.BAD_LP1:
+            fractions = {Legendary.GOOD_LP1: pop_l1}
+
+        if item is Legendary.BAD_LP2:
+            fractions = {Legendary.GOOD_LP2: pop_l2}
 
         if fractions is None:
             raise ValueError(f"Can not apply RerollQuality to {item}")
@@ -181,7 +197,7 @@ class Slam(CraftProcess):
         if item is Unique.GOOD_LP1:
             fractions = {Legendary.GOOD_LP1: 1.0}
 
-        if item is Unique.GOOD_LP1:
+        if item is Unique.GOOD_LP2:
             fractions = {
                 Legendary.GOOD_LP1: 1.0 / 3.0,
                 Legendary.BAD_LP1: 2.0 / 3.0,
