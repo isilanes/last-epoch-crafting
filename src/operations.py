@@ -6,7 +6,7 @@ from src.entities import (
     CraftProcess,
     Legendary,
     CraftPlan,
-    CraftAction, Nemesis, Slam,
+    CraftAction, Nemesis, Slam, LootItem,
 )
 
 
@@ -35,19 +35,21 @@ def drop(probs: Probabilities, normalize: float = 1.0) -> Population:
     )
 
 
-def make_craft_plans(crafts: list[CraftProcess]) -> list[CraftPlan]:
+def make_craft_plans(crafts: list[CraftProcess], items: list[LootItem]) -> list[CraftPlan]:
     """
     Given a list of craft processes, produce a list of craft plans.
 
     Args:
         crafts (list of CraftProcesses):
             Available craft processes.
+        items (list of LootItem):
+            Available items types.
 
     Returns:
         A list of craft plans.
     """
     plans = [CraftPlan()]  # base blank plan
-    for item in(*Unique, *Legendary):
+    for item in items:
         actions = [CraftAction(item=item, process=craft) for craft in crafts if item in craft.applies_to]
         if not actions:
             continue
@@ -59,13 +61,19 @@ def make_craft_plans(crafts: list[CraftProcess]) -> list[CraftPlan]:
                 new.append(extended)
         plans = new
 
-    print(len(plans), "plans created")
-    print(plans[0])
-
     return plans
 
 
 def main():
+    valid_items = [
+        Unique.GOOD_LP0,
+        Unique.GOOD_LP1,
+        Unique.BAD_LP0,
+        Unique.BAD_LP1,
+        Legendary.GOOD_LP1,
+        Legendary.BAD_LP1,
+    ]
+    valid_crafts = [RerollQuality, Nemesis, Slam]
     probs = Probabilities(
         unique_is_good=0.013,
         exalted_is_good_1=0.1,
@@ -75,44 +83,11 @@ def main():
         lp1=0.2,
     )
     population = drop(probs, normalize=100)
-    crafts = [
-        craft(probabilities=probs)
-        for craft in (
-            RerollQuality,
-            Nemesis,
-            Slam,
-        )
-    ]
+    crafts = [craft(probabilities=probs) for craft in valid_crafts]
 
-    # craft_plans = make_craft_plans(crafts)
-
-    print(population)
-    population.apply(crafts[1], Unique.GOOD_LP0)
-    print(population)
-    population.apply(crafts[1], Unique.BAD_LP0)
-    print(population)
-    population.apply(crafts[2], Unique.BAD_LP1)
-    print(population)
-    population.apply(crafts[0], Legendary.BAD_LP1)
-    print(population)
-    population.apply(crafts[2], Unique.GOOD_LP1)
-    print(population)
+    craft_plans = make_craft_plans(crafts, items=valid_items)
+    print(len(craft_plans), "plans created")
 
 
 if __name__ == "__main__":
     main()
-
-# nemesis = Nemesis(probs)
-# reroll_q = RerollQuality(probs)
-#
-# population.apply(reroll_q, LootItem.BAD_UNIQUE_LP0)
-# print(population)
-#
-# population.apply(nemesis, LootItem.GOOD_UNIQUE_LP0)
-# print(population)
-#
-# population.apply(reroll_q, LootItem.BAD_UNIQUE_LP1)
-# print(population)
-#
-# population.apply(reroll_q, LootItem.BAD_LEGENDARY_LP1)
-# print(population)
