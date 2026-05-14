@@ -224,11 +224,31 @@ class Population(BaseModel):
 
         return "".join(strings)
 
-    def apply(self, craft: CraftProcess, item: LootItem) -> None:
-        new = craft.apply_to(item)
-        p = self.fractions[item]
+    def apply_action(self, action: CraftAction) -> None:
+        new = action.process.apply_to(action.item)
+        p = self.fractions[action.item]
 
         for k, v in new.fractions.items():
             self.fractions[k] = self.fractions.get(k, 0) + p * v
 
-        self.fractions[item] = 0.0
+        self.fractions[action.item] = 0.0
+
+    def apply_craft_plan(self, plan: CraftPlan, goal: list[LootItem]) -> bool:
+        max_cycles = 5
+        i = 0
+        while not self.has_only(*goal):
+            i += 1
+            for action in plan.actions:
+                self.apply_action(action)
+            if i > max_cycles:
+                return False
+
+        return True
+
+    def has_only(self, *items: LootItem) -> bool:
+        for item in self.fractions:
+            if item not in items and self.fractions[item] > 0:
+                return False
+
+        return True
+

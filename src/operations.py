@@ -73,6 +73,7 @@ def main():
         Legendary.GOOD_LP1,
         Legendary.BAD_LP1,
     ]
+    goal = [Legendary.GOOD_LP1]
     valid_crafts = [RerollQuality, Nemesis, Slam]
     probs = Probabilities(
         unique_is_good=0.013,
@@ -82,11 +83,29 @@ def main():
         nemesis_lp1=1.0,
         lp1=0.2,
     )
-    population = drop(probs, normalize=100)
     crafts = [craft(probabilities=probs) for craft in valid_crafts]
 
     craft_plans = make_craft_plans(crafts, items=valid_items)
     print(len(craft_plans), "plans created")
+
+    plans = []
+    for plan in craft_plans:
+        population = drop(probs, normalize=100)
+        success = population.apply_craft_plan(plan, goal=goal)
+        if success:
+            pop = population.fractions[Legendary.GOOD_LP1]
+            plans.append((pop, plan))
+        else:
+            print("Failure!")
+            print(population)
+
+    plans.sort()
+    worst = plans[0][0]
+    for pop, plan in plans:
+        print(f"Good Legendary LP1: {pop:6.3f} ({pop/worst:4.2f}x)")
+
+    print("\nBest plan:")
+    print(plans[0][1])
 
 
 if __name__ == "__main__":
