@@ -100,6 +100,9 @@ class CraftPlan(BaseModel):
 
         return "\n".join(lines)
 
+    def __lt__(self, other):
+        return len(self.actions) < len(other.actions)
+
 
 class RerollQuality(CraftProcess):
     name: str = "[Reroll Quality]"
@@ -199,8 +202,8 @@ class Slam(CraftProcess):
 
         if item is Unique.GOOD_LP2:
             fractions = {
-                Legendary.GOOD_LP1: 1.0 / 3.0,
-                Legendary.BAD_LP1: 2.0 / 3.0,
+                Legendary.GOOD_LP2: 1.0 / 3.0,
+                Legendary.BAD_LP2: 2.0 / 3.0,
             }
 
         if fractions is None:
@@ -209,17 +212,49 @@ class Slam(CraftProcess):
         return Population(fractions=fractions)
 
 
+class RerollLegendaryPotential(CraftProcess):
+    name: str = "[Reroll LP]"
+    applies_to: list[LootItem] = [
+        Unique.BAD_LP1,
+        Unique.GOOD_LP1,
+    ]
+
+    def apply_to(self, item: LootItem) -> 'Population':
+        fractions = None
+        p2 = self.probabilities.lp2
+
+        if item is Unique.BAD_LP1:
+            fractions = {
+                Unique.BAD_LP0: 1 - p2,
+                Unique.BAD_LP2: p2,
+            }
+
+        if item is Unique.GOOD_LP1:
+            fractions = {
+                Unique.GOOD_LP0: 1 - p2,
+                Unique.GOOD_LP2: p2,
+            }
+
+        if fractions is None:
+            raise ValueError(f"Can not apply RerollLegendaryPotential to {item}")
+
+        return Population(fractions=fractions)
+
+
 class Population(BaseModel):
     """Holds amount of items of every object type."""
 
     fractions: Fractions = {}
+    goal: list[LootItem] = []
+    rubbish: list[LootItem] = []
+    threshold: float = 10**-6
 
     def __str__(self) -> str:
         strings = [
             "---\n",
-            "\n".join([f"UNIQUE:{item.name:10s}: {self.fractions.get(item, 0.0):6.3f}" for item in Unique]),
+            "\n".join([f"UNIQUE:{item.name:8s}: {self.fractions.get(item, 0.0):.6f}" for item in Unique]),
             "\n\n",
-            "\n".join([f"LEGEND:{item.name:10s}: {self.fractions.get(item, 0.0):6.3f}" for item in Legendary]),
+            "\n".join([f"LEGEND:{item.name:8s}: {self.fractions.get(item, 0.0):.6f}" for item in Legendary]),
         ]
 
         return "".join(strings)
@@ -233,13 +268,15 @@ class Population(BaseModel):
 
         self.fractions[action.item] = 0.0
 
-    def apply_craft_plan(self, plan: CraftPlan, goal: list[LootItem]) -> bool:
-        max_cycles = 5
+    def apply_craft_plan(self, plan: CraftPlan) -> bool:
+        max_cycles = 15
         i = 0
-        while not self.has_only(*goal):
+        while not self.has_only(*self.goal):
             i += 1
+            self.clean_rubbish()
             for action in plan.actions:
                 self.apply_action(action)
+
             if i > max_cycles:
                 return False
 
@@ -252,3 +289,11 @@ class Population(BaseModel):
 
         return True
 
+
+    def clean_rubbish(self) -> None:
+        for rubbish in self.rubbish:
+            self.fractions[rubbish] = 0.0
+
+        for k, w in self.fractions.items():
+            if w < self.threshold:
+                self.fractions[k] = 0.0
