@@ -73,7 +73,6 @@ def run_lp1():
         Legendary.GOOD_LP1,
         Legendary.BAD_LP1,
     ]
-    goal = [Legendary.GOOD_LP1]
     valid_crafts = [RerollQuality, Nemesis, Slam]
     probs = Probabilities(
         unique_is_good=0.013,
@@ -91,7 +90,8 @@ def run_lp1():
     plans = []
     for plan in craft_plans:
         population = drop(probs, normalize=100)
-        success = population.apply_craft_plan(plan, goal=goal)
+        population.goal = [Legendary.GOOD_LP1]
+        success = population.apply_craft_plan(plan)
         if success:
             pop = population.fractions[Legendary.GOOD_LP1]
             plans.append((pop, plan))
@@ -161,4 +161,4 @@ def run_lp2():
 
 
 if __name__ == "__main__":
-    run_lp2()
+    run_lp1()
